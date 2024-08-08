@@ -3,7 +3,7 @@ mod cpu;
 use cpu::Cpu;
 use log::{debug, error, info, warn};
 
-const INPUT_ROM: &str = "test_opcode.ch8";
+const INPUT_ROM: &str = "roms/test_opcode.ch8";
 
 fn main() {
     env_logger::init();

@@ -20,29 +20,28 @@ impl RomLoader {
     }
 
     pub fn view(&self) -> iced::Element<Message> {
-        let content = iced::widget::Row::new()
-            .spacing(10)
-            .align_items(iced::Alignment::Center)
-            .push(iced::widget::Text::new("Load ROM: "))
-            .push(
-                iced::widget::TextInput::new("Enter ROM Path", &self.rom_path)
-                    .on_input(Message::RomPathChanged),
-            )
-            .push(
-                iced::widget::Button::new("Load")
-                    .on_press(Message::LoadRom)
-                    .padding(15),
-            );
+        let content = iced::widget::row![
+            iced::widget::Text::new("Load ROM: "),
+            iced::widget::TextInput::new("Enter ROM Path", &self.rom_path)
+                .on_input(Message::RomPathChanged),
+            iced::widget::Button::new("Load")
+                .on_press(Message::LoadRom)
+                .padding(15),
+        ]
+        .spacing(10)
+        .align_items(iced::Alignment::Center);
 
         let cols = iced::widget::column![
             content,
             if self.read_status {
                 iced::widget::Text::new(format!(
-                    "*Successfuly read {} bytes from ROM file.",
+                    "*Successfuly loaded {} bytes from ROM file.",
                     self.size_bytes
                 ))
+            } else if self.size_bytes == 0 {
+                iced::widget::Text::new("*Please load a ROM file.")
             } else {
-                iced::widget::Text::new("*Error reading ROM file. Please check file path.")
+                iced::widget::Text::new("*Error loading ROM file. Please check file path.")
             }
         ];
 

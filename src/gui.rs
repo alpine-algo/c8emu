@@ -1,3 +1,4 @@
+mod display;
 mod rom_loader;
 
 use crate::cpu::Cpu;
@@ -43,7 +44,7 @@ impl Application for Gui {
     }
 
     fn title(&self) -> String {
-        String::from("CHIP-8 Emulator")
+        String::from("CHIP-8 Emulator - github/alpine-algo")
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
@@ -60,18 +61,26 @@ impl Application for Gui {
                 let now = Instant::now();
                 let elapsed = now.duration_since(self.last_display_update);
                 if elapsed >= Duration::from_secs_f64(1.0 / self.display_hz as f64) {
-                    // Update display here
+                    // DISPLAY UPDATES HERE !!!
                     self.last_display_update = now;
                 }
             }
-            Message::RomLoader(msg) => match self.rom_loader.update(msg) {
-                rom_loader::RomLoaderResult::None => {}
-                rom_loader::RomLoaderResult::LoadRom(path) => match self.cpu.load_rom(&path) {
-                    Ok(result) => self.rom_loader.update_bytes(result.bytes_read),
-                    Err(e) => {
-                        error!("Error loading ROM: {}", e);
+            Message::RomLoader(msg) => match msg {
+                rom_loader::Message::RomPathChanged(path) => {
+                    self.rom_loader.rom_path = path;
+                }
+                rom_loader::Message::LoadRom => {
+                    match self.cpu.load_rom(&self.rom_loader.rom_path) {
+                        Ok(result) => {
+                            self.rom_loader.size_bytes = result.bytes_read;
+                            self.rom_loader.read_status = true;
+                        }
+                        Err(e) => {
+                            self.rom_loader.read_status = false;
+                            error!("Error loading ROM: {}", e)
+                        }
                     }
-                },
+                }
             },
         }
         Command::none()
@@ -81,6 +90,7 @@ impl Application for Gui {
         // GUI layout here
         iced::widget::Column::new()
             .push(self.rom_loader.view().map(Message::RomLoader))
+            .padding(15)
             .into()
     }
 

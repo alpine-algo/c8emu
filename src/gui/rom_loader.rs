@@ -4,14 +4,10 @@ pub enum Message {
     LoadRom,
 }
 
-pub enum RomLoaderResult {
-    None,
-    LoadRom(String),
-}
-
 pub struct RomLoader {
-    rom_path: String,
-    size_bytes: usize,
+    pub rom_path: String,
+    pub size_bytes: usize,
+    pub read_status: bool,
 }
 
 impl RomLoader {
@@ -19,31 +15,39 @@ impl RomLoader {
         Self {
             rom_path: String::from("roms/test_opcode.ch8"),
             size_bytes: 0,
+            read_status: false,
         }
     }
 
     pub fn view(&self) -> iced::Element<Message> {
-        iced::widget::column![
-            iced::widget::Text::new("Load ROM"),
-            iced::widget::TextInput::new("Enter ROM Path", &self.rom_path)
-                .on_input(Message::RomPathChanged),
-            iced::widget::Button::new("Load").on_press(Message::LoadRom),
-            iced::widget::Text::new(format!("ROM Size: {} bytes", self.size_bytes))
-        ]
-        .into()
-    }
+        let content = iced::widget::Row::new()
+            .spacing(10)
+            .align_items(iced::Alignment::Center)
+            .push(iced::widget::Text::new("Load ROM: "))
+            .push(
+                iced::widget::TextInput::new("Enter ROM Path", &self.rom_path)
+                    .on_input(Message::RomPathChanged),
+            )
+            .push(
+                iced::widget::Button::new("Load")
+                    .on_press(Message::LoadRom)
+                    .padding(15),
+            );
 
-    pub fn update(&mut self, message: Message) -> RomLoaderResult {
-        match message {
-            Message::RomPathChanged(new_path) => {
-                self.rom_path = new_path;
-                RomLoaderResult::None
+        let cols = iced::widget::column![
+            content,
+            if self.read_status {
+                iced::widget::Text::new(format!(
+                    "*Successfuly read {} bytes from ROM file.",
+                    self.size_bytes
+                ))
+            } else {
+                iced::widget::Text::new("*Error reading ROM file. Please check file path.")
             }
-            Message::LoadRom => RomLoaderResult::LoadRom(self.rom_path.clone()),
-        }
-    }
+        ];
 
-    pub fn update_bytes(&mut self, size: usize) {
-        self.size_bytes = size;
+        let container = iced::widget::Container::new(cols).padding(15);
+
+        container.into()
     }
 }

@@ -1,21 +1,10 @@
 mod cpu;
+mod gui;
 
-use cpu::Cpu;
-use log::{debug, error, info, warn};
+use crate::gui::Gui;
+use iced::{Application, Settings};
 
-const INPUT_ROM: &str = "roms/test_opcode.ch8";
-
-fn main() {
+fn main() -> iced::Result {
     env_logger::init();
-
-    let mut cpu: Cpu = Cpu::new();
-
-    if let Err(e) = cpu.load_rom(INPUT_ROM) {
-        error!("Error loading ROM: {}", e);
-        return;
-    }
-
-    for _ in 0..15 {
-        cpu.cpu_exec();
-    }
+    Gui::run(Settings::default())
 }

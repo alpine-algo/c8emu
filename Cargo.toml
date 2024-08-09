@@ -5,6 +5,13 @@ edition = "2021"
 
 [dependencies]
 env_logger = "0.11.5"
+iced = { version = "0.12.1", default-features = false, features = [
+    "wgpu",
+    "canvas",
+    "debug",
+    "async-std",
+    "fira-sans",
+] }
 log = "0.4.22"
 rand = "0.8.5"
 thiserror = "1.0.63"

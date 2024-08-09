@@ -32,6 +32,10 @@ pub struct Cpu {
                        // display: [[bool; 64], 32];
 }
 
+pub struct RomLoadResult {
+    pub bytes_read: usize,
+}
+
 impl Cpu {
     pub fn new() -> Self {
         Cpu {
@@ -47,7 +51,7 @@ impl Cpu {
         }
     }
 
-    pub fn load_rom(&mut self, rom_file: &str) -> Result<(), CpuError> {
+    pub fn load_rom(&mut self, rom_file: &str) -> Result<RomLoadResult, CpuError> {
         let mut f: File = File::open(rom_file).map_err(|e| CpuError::RomOpenError { err: e })?;
 
         let mut buf: Vec<u8> = Vec::new();
@@ -67,7 +71,7 @@ impl Cpu {
 
         info!("Read {:?} bytes from CHIP-8 ROM '{}'", bytes_read, rom_file);
 
-        Ok(())
+        Ok(RomLoadResult { bytes_read })
     }
 
     fn next_instr(&self) -> u16 {

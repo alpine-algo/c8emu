@@ -2,6 +2,7 @@ mod display;
 mod rom_loader;
 
 use crate::cpu::Cpu;
+use crate::gui::display::Display;
 use crate::gui::rom_loader::RomLoader;
 use iced::{Application, Command, Element, Subscription, Theme};
 use log::error;
@@ -12,6 +13,7 @@ pub enum Message {
     CpuTick,
     DisplayTick,
     RomLoader(rom_loader::Message),
+    Display(display::Message),
 }
 
 pub struct Gui {
@@ -21,6 +23,7 @@ pub struct Gui {
     cpu_hz: u64,
     display_hz: u64,
     rom_loader: RomLoader,
+    display: Display,
 }
 
 impl Application for Gui {
@@ -38,6 +41,7 @@ impl Application for Gui {
                 cpu_hz: 1, //500,
                 display_hz: 60,
                 rom_loader: RomLoader::new(),
+                display: Display::new(),
             },
             Command::none(),
         )
@@ -82,6 +86,9 @@ impl Application for Gui {
                     }
                 }
             },
+            Message::Display(msg) => match msg {
+                _ => {}
+            },
         }
         Command::none()
     }
@@ -90,6 +97,7 @@ impl Application for Gui {
         // GUI layout here
         iced::widget::Column::new()
             .push(self.rom_loader.view().map(Message::RomLoader))
+            .push(self.display.view().map(Message::Display))
             .padding(15)
             .into()
     }

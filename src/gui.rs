@@ -24,6 +24,7 @@ pub struct Gui {
     display_hz: u64,
     rom_loader: RomLoader,
     display: Display,
+    count: u32,
 }
 
 impl Application for Gui {
@@ -38,10 +39,11 @@ impl Application for Gui {
                 cpu: Cpu::new(),
                 last_cpu_update: Instant::now(),
                 last_display_update: Instant::now(),
-                cpu_hz: 1, //500,
-                display_hz: 60,
+                cpu_hz: 1,     //500,
+                display_hz: 1, // 60
                 rom_loader: RomLoader::new(),
                 display: Display::new(),
+                count: 0,
             },
             Command::none(),
         )
@@ -65,7 +67,12 @@ impl Application for Gui {
                 let now = Instant::now();
                 let elapsed = now.duration_since(self.last_display_update);
                 if elapsed >= Duration::from_secs_f64(1.0 / self.display_hz as f64) {
-                    // DISPLAY UPDATES HERE !!!
+                    self.cpu.set_display(self.count as usize % 64, 10, true);
+                    self.count += 1;
+
+                    println!("Counter: {}", self.count);
+
+                    self.display.update(self.cpu.get_display()); // Update display buffer on display tick
                     self.last_display_update = now;
                 }
             }

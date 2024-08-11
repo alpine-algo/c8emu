@@ -33,6 +33,10 @@ impl Display {
         self.buffer[19][38] = true;
         self.buffer[30][45] = true;
     }
+
+    pub fn update(&mut self, new_disp: [[bool; 64]; 32]) {
+        self.buffer = new_disp;
+    }
 }
 
 impl<Message> iced::widget::canvas::Program<Message> for Display {

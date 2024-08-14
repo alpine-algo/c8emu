@@ -12,7 +12,7 @@ impl Display {
             buffer: [[false; 64]; 32],
             cache: iced::widget::canvas::Cache::default(),
         };
-        display.draw_test_pattern();
+        // display.draw_test_pattern();
         display
     }
 
@@ -35,7 +35,18 @@ impl Display {
     }
 
     pub fn update(&mut self, new_disp: [[bool; 64]; 32]) {
-        self.buffer = new_disp;
+        let mut changed = false;
+        for y in 0..32 {
+            for x in 0..64 {
+                if new_disp[y][x] != self.buffer[y][x] {
+                    self.buffer[y][x] = new_disp[y][x];
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            self.cache.clear();
+        }
     }
 }
 

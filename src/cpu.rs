@@ -19,17 +19,17 @@ pub enum CpuError {
 }
 
 pub struct Cpu {
-    memory: [u8; END], // RAM: 0x000 (0) to 0xFFF (4095)
-    rom_size: usize,   // Size of Loaded ROM (bytes)
-    v: [u8; 16],       // V0 (0) .. VF (15) Registers
-    i: u16,            // Memory Address Store
-    pc: u16,           // Program Counter (currently executing address)
-    stack: Vec<u16>,   // Stack, 16 Spaces
-    sp: u8,            // Stack Pointer
-    dt: u8,            // Delay Timer
-    st: u8,            // Sound Timer
-                       // keypad: [bool; 16],
-                       // display: [[bool; 64], 32];
+    memory: [u8; END],         // RAM: 0x000 (0) to 0xFFF (4095)
+    rom_size: usize,           // Size of Loaded ROM (bytes)
+    v: [u8; 16],               // V0 (0) .. VF (15) Registers
+    i: u16,                    // Memory Address Store
+    pc: u16,                   // Program Counter (currently executing address)
+    stack: Vec<u16>,           // Stack, 16 Spaces
+    sp: u8,                    // Stack Pointer
+    dt: u8,                    // Delay Timer
+    st: u8,                    // Sound Timer
+    keypad: [bool; 16],        // Input Keypad
+    display: [[bool; 64]; 32], // Display Buffer
 }
 
 pub struct RomLoadResult {
@@ -48,6 +48,8 @@ impl Cpu {
             sp: 0,
             dt: 0,
             st: 0,
+            keypad: [false; 16],
+            display: [[false; 64]; 32],
         }
     }
 
@@ -91,7 +93,7 @@ impl Cpu {
                 match cmd {
                     0x00E0 => {
                         // CLS - Clear display
-                        // TBD - Not Yet Implemented
+                        self.display = [[false; 64]; 32];
                     }
                     0x00EE => {
                         // RET - Return from a subroutine
@@ -103,7 +105,6 @@ impl Cpu {
                     }
                     _ => {
                         // 0NNN - Execute subroutine at address NNN
-                        // TBD - Do we even need to implement this system JMP?
                         warn!("SYSTEM JMP to {:X} - Not Implemented!", 0x0FFF & cmd);
                     }
                 }
@@ -380,5 +381,13 @@ impl Cpu {
             },
             _ => (), // Misc Instruction
         }
+    }
+
+    pub fn set_display(&mut self, x: usize, y: usize, value: bool) {
+        self.display[y][x] = value;
+    }
+
+    pub fn get_display(&self) -> [[bool; 64]; 32] {
+        return self.display;
     }
 }

@@ -49,6 +49,13 @@ impl<Message> iced::widget::canvas::Program<Message> for Display {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
         let screen = self.cache.draw(renderer, bounds.size(), |frame| {
+            // Draw background
+            let bg_path = iced::widget::canvas::Path::rectangle(
+                iced::Point::new(0.0, 0.0),
+                frame.size(),
+            );
+            frame.fill(&bg_path, iced::Color::from_rgb(0.95, 0.95, 0.95));
+
             let w: f32 = frame.width() / 64.0;
             let h: f32 = frame.height() / 32.0;
 
@@ -60,13 +67,6 @@ impl<Message> iced::widget::canvas::Program<Message> for Display {
                             iced::Size::new(w, h),
                         );
                         frame.fill(&path, iced::Color::BLACK);
-                    } else {
-                        // Fill empty cells light gray
-                        let path = iced::widget::canvas::Path::rectangle(
-                            iced::Point::new(x as f32 * w, y as f32 * h),
-                            iced::Size::new(w, h),
-                        );
-                        frame.fill(&path, iced::Color::from_rgb(0.95, 0.95, 0.95));
                     }
                 }
             }

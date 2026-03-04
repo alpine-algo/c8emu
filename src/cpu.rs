@@ -127,8 +127,9 @@ impl Cpu {
     }
 
     fn next_instr(&self) -> u16 {
-        let b1 = self.memory[self.pc as usize];
-        let b2 = self.memory[(self.pc + 1) as usize];
+        let pc = self.pc as usize & 0xFFF;
+        let b1 = self.memory[pc];
+        let b2 = self.memory[(pc + 1) & 0xFFF];
         ((b1 as u16) << 8) | b2 as u16
     }
 
@@ -145,7 +146,7 @@ impl Cpu {
         let kk = (cmd & 0x00FF) as u8;
         let n = (cmd & 0x000F) as u8;
 
-        self.pc += 2;
+        self.pc = (self.pc + 2) & 0xFFF;
 
         match opcode {
             0x0 => match cmd {
@@ -167,22 +168,26 @@ impl Cpu {
                 self.pc = nnn;
             }
             0x2 => {
-                self.stack.push(self.pc);
-                self.pc = nnn;
+                if self.stack.len() < 16 {
+                    self.stack.push(self.pc);
+                    self.pc = nnn;
+                } else {
+                    warn!("Stack overflow on CALL!");
+                }
             }
             0x3 => {
                 if self.v[x] == kk {
-                    self.pc += 2;
+                    self.pc = (self.pc + 2) & 0xFFF;
                 }
             }
             0x4 => {
                 if self.v[x] != kk {
-                    self.pc += 2;
+                    self.pc = (self.pc + 2) & 0xFFF;
                 }
             }
             0x5 => {
                 if self.v[x] == self.v[y] {
-                    self.pc += 2;
+                    self.pc = (self.pc + 2) & 0xFFF;
                 }
             }
             0x6 => {
@@ -223,14 +228,14 @@ impl Cpu {
             },
             0x9 => {
                 if self.v[x] != self.v[y] {
-                    self.pc += 2;
+                    self.pc = (self.pc + 2) & 0xFFF;
                 }
             }
             0xA => {
                 self.i = nnn;
             }
             0xB => {
-                self.pc = nnn + self.v[0] as u16;
+                self.pc = (nnn + self.v[0] as u16) & 0xFFF;
             }
             0xC => {
                 let rand: u8 = rand::thread_rng().gen();
@@ -245,7 +250,8 @@ impl Cpu {
                     if start_y + row >= 32 {
                         break;
                     }
-                    let sprite_byte = self.memory[self.i as usize + row];
+                    let addr = (self.i as usize + row) & 0xFFF;
+                    let sprite_byte = self.memory[addr];
                     for col in 0..8 {
                         if start_x + col >= 64 {
                             break;
@@ -265,12 +271,12 @@ impl Cpu {
             0xE => match kk {
                 0x9E => {
                     if self.keypad[self.v[x] as usize & 0xF] {
-                        self.pc += 2;
+                        self.pc = (self.pc + 2) & 0xFFF;
                     }
                 }
                 0xA1 => {
                     if !self.keypad[self.v[x] as usize & 0xF] {
-                        self.pc += 2;
+                        self.pc = (self.pc + 2) & 0xFFF;
                     }
                 }
                 _ => warn!("Unknown ExNN opcode: {:04X}", cmd),
@@ -283,28 +289,31 @@ impl Cpu {
                 0x15 => self.dt = self.v[x],
                 0x18 => self.st = self.v[x],
                 0x1E => {
-                    self.i = self.i.wrapping_add(self.v[x] as u16);
+                    self.i = self.i.wrapping_add(self.v[x] as u16) & 0xFFF;
                 }
                 0x29 => {
                     self.i = (self.v[x] as u16 & 0xF) * 5;
                 }
                 0x33 => {
                     let val = self.v[x];
-                    self.memory[self.i as usize] = val / 100;
-                    self.memory[self.i as usize + 1] = (val / 10) % 10;
-                    self.memory[self.i as usize + 2] = val % 10;
+                    let i = self.i as usize;
+                    self.memory[i & 0xFFF] = val / 100;
+                    self.memory[(i + 1) & 0xFFF] = (val / 10) % 10;
+                    self.memory[(i + 2) & 0xFFF] = val % 10;
                 }
                 0x55 => {
                     for idx in 0..=x {
-                        self.memory[self.i as usize + idx] = self.v[idx];
+                        let addr = (self.i as usize + idx) & 0xFFF;
+                        self.memory[addr] = self.v[idx];
                     }
-                    self.i += x as u16 + 1;
+                    self.i = (self.i + x as u16 + 1) & 0xFFF;
                 }
                 0x65 => {
                     for idx in 0..=x {
-                        self.v[idx] = self.memory[self.i as usize + idx];
+                        let addr = (self.i as usize + idx) & 0xFFF;
+                        self.v[idx] = self.memory[addr];
                     }
-                    self.i += x as u16 + 1;
+                    self.i = (self.i + x as u16 + 1) & 0xFFF;
                 }
                 _ => warn!("Unknown FxNN opcode: {:04X}", cmd),
             },

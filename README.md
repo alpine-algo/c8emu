@@ -2,6 +2,8 @@
 
 A robust, high-performance CHIP-8 emulator written in Rust using the [Iced](https://iced.rs/) GUI library. This project implements the full CHIP-8 specification, including all 35 standard opcodes, 60Hz timers, and a 64x32 monochrome display.
 
+![CHIP-8 Emulator Screenshot](img/chip8_iced_alpine-algo.png)
+
 ## Features
 
 - **Full Instruction Set:** Complete implementation of all CHIP-8 opcodes.

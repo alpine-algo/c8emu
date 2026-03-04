@@ -5,7 +5,6 @@ use crate::cpu::Cpu;
 use crate::gui::display::Display;
 use crate::gui::rom_loader::RomLoader;
 use iced::keyboard::Key;
-use iced::keyboard::key::Named;
 use iced::{event, Application, Command, Element, Event, Subscription, Theme};
 use log::error;
 use std::time::Duration;
@@ -97,7 +96,7 @@ impl Application for Gui {
         Command::none()
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         iced::widget::Column::new()
             .push(self.rom_loader.view().map(Message::RomLoader))
             .push(self.display.view().map(Message::Display))

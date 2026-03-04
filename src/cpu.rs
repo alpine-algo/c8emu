@@ -1,4 +1,4 @@
-use log::{debug, info, warn};
+use log::{info, warn};
 use rand::Rng;
 use std::fs::File;
 use std::io::Read;
@@ -114,10 +114,6 @@ impl Cpu {
         }
     }
 
-    pub fn is_beeping(&self) -> bool {
-        self.st > 0
-    }
-
     pub fn set_keypad(&mut self, key: usize, pressed: bool) {
         if key < 16 {
             self.keypad[key] = pressed;
@@ -211,11 +207,6 @@ impl Cpu {
                     self.v[0xF] = if !overflow { 1 } else { 0 }; // VF=1 if NO borrow
                 }
                 0x6 => {
-                    // Cowgod: VF is set to the least significant bit of VX before the shift
-                    // Most programs use the COSMAC version: VX = VY >> 1
-                    // But some use VX = VX >> 1. 
-                    // Let's stick to the modern/standard CHIP-8 expectation where it shifts VX.
-                    // Actually let's use the provided specs: "VF := VX & 0x01; VX := VX / 2"
                     self.v[0xF] = self.v[x] & 0x1;
                     self.v[x] >>= 1;
                 }
@@ -246,7 +237,6 @@ impl Cpu {
                 self.v[x] = rand & kk;
             }
             0xD => {
-                // DRW Vx, Vy, nibble
                 let start_x = (self.v[x] % 64) as usize;
                 let start_y = (self.v[y] % 32) as usize;
                 self.v[0xF] = 0;
@@ -308,11 +298,13 @@ impl Cpu {
                     for idx in 0..=x {
                         self.memory[self.i as usize + idx] = self.v[idx];
                     }
+                    self.i += x as u16 + 1;
                 }
                 0x65 => {
                     for idx in 0..=x {
                         self.v[idx] = self.memory[self.i as usize + idx];
                     }
+                    self.i += x as u16 + 1;
                 }
                 _ => warn!("Unknown FxNN opcode: {:04X}", cmd),
             },

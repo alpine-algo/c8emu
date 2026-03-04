@@ -19,7 +19,7 @@ impl RomLoader {
         }
     }
 
-    pub fn view(&self) -> iced::Element<Message> {
+    pub fn view(&self) -> iced::Element<'_, Message> {
         let content = iced::widget::row![
             iced::widget::Text::new("Load ROM: "),
             iced::widget::TextInput::new("Enter ROM Path", &self.rom_path)

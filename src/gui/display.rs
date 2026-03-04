@@ -8,30 +8,17 @@ pub struct Display {
 
 impl Display {
     pub fn new() -> Self {
-        let mut display = Self {
+        Self {
             buffer: [[false; 64]; 32],
             cache: iced::widget::canvas::Cache::default(),
-        };
-        // display.draw_test_pattern();
-        display
+        }
     }
 
-    pub fn view(&self) -> iced::Element<Message> {
+    pub fn view(&self) -> iced::Element<'_, Message> {
         iced::widget::Canvas::new(self)
             .width(iced::Length::Fill)
             .height(iced::Length::Fill)
             .into()
-    }
-
-    pub fn draw_test_pattern(&mut self) {
-        // [y][x] --> max: [31, 63]]
-        self.buffer[5][5] = true;
-        self.buffer[9][13] = true;
-        self.buffer[10][10] = true;
-        self.buffer[15][15] = true;
-        self.buffer[27][60] = true;
-        self.buffer[19][38] = true;
-        self.buffer[30][45] = true;
     }
 
     pub fn update(&mut self, new_disp: [[bool; 64]; 32]) {
@@ -62,8 +49,8 @@ impl<Message> iced::widget::canvas::Program<Message> for Display {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
         let screen = self.cache.draw(renderer, bounds.size(), |frame| {
-            let w: f32 = 7.0;
-            let h: f32 = 7.0;
+            let w: f32 = frame.width() / 64.0;
+            let h: f32 = frame.height() / 32.0;
 
             for (y, row) in self.buffer.iter().enumerate() {
                 for (x, &cell) in row.iter().enumerate() {

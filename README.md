@@ -1,41 +1,53 @@
 # CHIP-8 Emulator (Rust + Iced)
 
-A robust, high-performance CHIP-8 emulator written in Rust using the [Iced](https://iced.rs/) GUI library. This project implements the full CHIP-8 specification, including all 35 standard opcodes, 60Hz timers, and a 64x32 monochrome display.
+A desktop CHIP-8 emulator written in Rust with an [Iced](https://iced.rs/) interface. It provides a CHIP-8 CPU, keypad, timers, ROM loading, and a 64×32 monochrome display.
 
 ![CHIP-8 Emulator Screenshot](img/chip8_iced_alpine-algo.png)
 
 ## Features
 
-- **Full Instruction Set:** Complete implementation of all CHIP-8 opcodes.
-- **Accurate Timing:** 60Hz timer ticks and ~600Hz CPU cycle speed.
-- **Modern GUI:** Clean interface for loading ROMs and viewing the display.
-- **Keyboard Mapping:** Intuitive mapping for the original 16-key hex keypad.
+- **CHIP-8 core and display:** Executes CHIP-8 instructions on the original 64×32 monochrome display.
+- **Timing:** While a ROM is running, each nominal 60 Hz update advances the timers once and budgets 10 CPU instruction steps; idle and faulted sessions do not advance.
+- **ROM loading:** Accepts a ROM file path through the GUI.
+- **Keyboard mapping:** Maps a computer keyboard to the original 16-key hexadecimal keypad.
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
+- [Rust](https://www.rust-lang.org/tools/install) stable, including the rustfmt and Clippy components.
 - A graphics driver supporting Vulkan or OpenGL.
 
-### Installation & Execution
+### Fresh checkout
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/c8emu.git
-   cd c8emu
-   ```
+Clone the repository and install the required Rust components:
 
-2. Run the emulator:
-   ```bash
-   cargo run --release
-   ```
+```bash
+git clone https://github.com/alpine-algo/c8emu.git
+cd c8emu
+rustup component add rustfmt clippy
+```
 
-3. Enter the path to a ROM file (e.g., `roms/test_opcode.ch8`) and click **Load**.
+Run the same locked verification sequence used by continuous integration:
+
+```bash
+cargo fmt -- --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked
+cargo check --locked
+```
+
+Start the release build without changing the locked dependency graph:
+
+```bash
+cargo run --release --locked
+```
+
+Enter the path to a CHIP-8 ROM file and click **Load ROM**.
 
 ## Keypad Mapping
 
-The original CHIP-8 hex keypad is mapped to your keyboard as follows:
+The CHIP-8 hexadecimal keypad is mapped to the keyboard as follows:
 
 | CHIP-8 Keypad | Computer Keyboard |
 | :---: | :---: |
@@ -44,13 +56,26 @@ The original CHIP-8 hex keypad is mapped to your keyboard as follows:
 | `7 8 9 E` | `A S D F` |
 | `A 0 B F` | `Z X C V` |
 
+## Compatibility Behavior
+
+The emulator uses one fixed CHIP-8 quirk profile:
+
+- `8xy1`, `8xy2`, and `8xy3` leave `VF` unchanged.
+- `8xy6` and `8xyE` shift `Vx`; they do not use `Vy` as the source.
+- `Bnnn` adds `V0` to `nnn`.
+- Sprite drawing clips at the 64×32 display edges instead of wrapping.
+- `Fx55` and `Fx65` increment `I` by the number of transferred registers.
+
+ROMs that require a different quirk profile may behave differently.
+
 ## Troubleshooting
 
 ### Vulkan Validation Errors (Linux)
-If you see `wgpu_hal::vulkan` validation errors in your terminal on Linux, you can force the OpenGL backend, which is typically more stable for simple 2D applications:
+
+If `wgpu_hal::vulkan` reports validation errors on Linux, use the OpenGL backend:
 
 ```bash
-WGPU_BACKEND=gl cargo run
+WGPU_BACKEND=gl cargo run --release --locked
 ```
 
 ## References
@@ -61,4 +86,4 @@ WGPU_BACKEND=gl cargo run
 
 ## License
 
-This project is licensed under the MIT License.
+This project is available under the [MIT License](LICENSE).

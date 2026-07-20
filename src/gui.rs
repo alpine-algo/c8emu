@@ -63,8 +63,10 @@ impl Application for Gui {
                     self.cpu.tick_timers();
                     for _ in 0..INSTRUCTIONS_PER_TICK {
                         if let Err(fault) = self.cpu.cpu_exec() {
-                            error!("CPU execution fault: {}", fault);
                             self.runtime = RuntimeState::Faulted(fault);
+                            if let RuntimeState::Faulted(fault) = &self.runtime {
+                                error!("CPU execution fault: {}", fault);
+                            }
                             break;
                         }
                     }

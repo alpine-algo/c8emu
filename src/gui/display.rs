@@ -21,7 +21,7 @@ impl Display {
             .into()
     }
 
-    pub fn update(&mut self, new_disp: [[bool; 64]; 32]) {
+    pub fn update(&mut self, new_disp: &[[bool; 64]; 32]) {
         let mut changed = false;
         for y in 0..32 {
             for x in 0..64 {
@@ -50,10 +50,8 @@ impl<Message> iced::widget::canvas::Program<Message> for Display {
     ) -> Vec<iced::widget::canvas::Geometry> {
         let screen = self.cache.draw(renderer, bounds.size(), |frame| {
             // Draw background
-            let bg_path = iced::widget::canvas::Path::rectangle(
-                iced::Point::new(0.0, 0.0),
-                frame.size(),
-            );
+            let bg_path =
+                iced::widget::canvas::Path::rectangle(iced::Point::new(0.0, 0.0), frame.size());
             frame.fill(&bg_path, iced::Color::from_rgb(0.95, 0.95, 0.95));
 
             let w: f32 = frame.width() / 64.0;

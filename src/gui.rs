@@ -51,9 +51,12 @@ impl Application for Gui {
             Message::Tick => {
                 self.cpu.tick_timers();
                 for _ in 0..self.cpu_speed {
-                    self.cpu.cpu_exec();
+                    if let Err(fault) = self.cpu.cpu_exec() {
+                        error!("CPU execution fault: {}", fault);
+                        break;
+                    }
                 }
-                self.display.update(self.cpu.get_display());
+                self.display.update(self.cpu.framebuffer());
             }
             Message::Event(event) => {
                 if let Event::Keyboard(kbd_event) = event {

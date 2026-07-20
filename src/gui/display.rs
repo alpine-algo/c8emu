@@ -23,10 +23,10 @@ impl Display {
 
     pub fn update(&mut self, new_disp: &[[bool; 64]; 32]) {
         let mut changed = false;
-        for y in 0..32 {
-            for x in 0..64 {
-                if new_disp[y][x] != self.buffer[y][x] {
-                    self.buffer[y][x] = new_disp[y][x];
+        for (y, row) in new_disp.iter().enumerate() {
+            for (x, &cell) in row.iter().enumerate() {
+                if cell != self.buffer[y][x] {
+                    self.buffer[y][x] = cell;
                     changed = true;
                 }
             }

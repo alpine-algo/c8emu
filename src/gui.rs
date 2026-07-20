@@ -90,21 +90,18 @@ impl Application for Gui {
             }
             Message::RomLoader(msg) => match msg {
                 rom_loader::Message::RomPathChanged(path) => {
-                    self.rom_loader.rom_path = path;
+                    self.rom_loader.set_path(path);
                 }
-                rom_loader::Message::LoadRom => {
-                    match self.cpu.load_rom(&self.rom_loader.rom_path) {
-                        Ok(result) => {
-                            self.rom_loader.size_bytes = result.bytes_read;
-                            self.read_status_ok();
-                            self.runtime = RuntimeState::Running;
-                        }
-                        Err(e) => {
-                            self.rom_loader.read_status = false;
-                            error!("Error loading ROM: {}", e)
-                        }
+                rom_loader::Message::LoadRom => match self.cpu.load_rom(self.rom_loader.path()) {
+                    Ok(result) => {
+                        self.rom_loader.record_success(result.bytes_read);
+                        self.runtime = RuntimeState::Running;
                     }
-                }
+                    Err(error) => {
+                        self.rom_loader.record_failure(error.to_string());
+                        error!("Error loading ROM: {}", error);
+                    }
+                },
             },
             Message::Display(_) => {}
         }
@@ -113,7 +110,7 @@ impl Application for Gui {
 
     fn view(&self) -> Element<'_, Message> {
         iced::widget::Column::new()
-            .push(self.rom_loader.view().map(Message::RomLoader))
+            .push(self.rom_loader.view(&self.runtime).map(Message::RomLoader))
             .push(self.display.view().map(Message::Display))
             .padding(15)
             .into()
@@ -125,12 +122,6 @@ impl Application for Gui {
                 .map(|_| Message::Tick),
             event::listen().map(Message::Event),
         ])
-    }
-}
-
-impl Gui {
-    fn read_status_ok(&mut self) {
-        self.rom_loader.read_status = true;
     }
 }
 
@@ -212,6 +203,13 @@ mod tests {
         Faulted,
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum AttemptKind {
+        NotAttempted,
+        Succeeded,
+        Failed,
+    }
+
     #[derive(Debug, Clone, Copy)]
     enum Setup {
         Idle,
@@ -232,6 +230,7 @@ mod tests {
         setup: Setup,
         action: Action,
         expected: StateKind,
+        expected_attempt: AttemptKind,
     }
 
     fn new_gui() -> Gui {
@@ -279,6 +278,14 @@ mod tests {
             RuntimeState::Idle => StateKind::Idle,
             RuntimeState::Running => StateKind::Running,
             RuntimeState::Faulted(_) => StateKind::Faulted,
+        }
+    }
+
+    fn attempt_kind(gui: &Gui) -> AttemptKind {
+        match gui.rom_loader.attempt() {
+            rom_loader::LoadAttempt::NotAttempted => AttemptKind::NotAttempted,
+            rom_loader::LoadAttempt::Succeeded { .. } => AttemptKind::Succeeded,
+            rom_loader::LoadAttempt::Failed { .. } => AttemptKind::Failed,
         }
     }
 
@@ -351,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn lifecycle_transition_table() {
+    fn lifecycle_and_loader_attempt_transition_table() {
         let loop_path = write_rom("transitions-loop", &[0x1200]);
         let fault_path = write_rom("transitions-fault", &[0xFFFF]);
         let empty_path = write_rom("transitions-empty", &[]);
@@ -361,60 +368,70 @@ mod tests {
                 setup: Setup::Idle,
                 action: Action::Tick,
                 expected: StateKind::Idle,
+                expected_attempt: AttemptKind::NotAttempted,
             },
             TransitionCase {
                 name: "idle successful load",
                 setup: Setup::Idle,
                 action: Action::LoadSuccess,
                 expected: StateKind::Running,
+                expected_attempt: AttemptKind::Succeeded,
             },
             TransitionCase {
                 name: "idle failed load",
                 setup: Setup::Idle,
                 action: Action::LoadFailure,
                 expected: StateKind::Idle,
+                expected_attempt: AttemptKind::Failed,
             },
             TransitionCase {
                 name: "running successful tick",
                 setup: Setup::RunningLoop,
                 action: Action::Tick,
                 expected: StateKind::Running,
+                expected_attempt: AttemptKind::Succeeded,
             },
             TransitionCase {
                 name: "running execution fault",
                 setup: Setup::RunningFaultNext,
                 action: Action::Tick,
                 expected: StateKind::Faulted,
+                expected_attempt: AttemptKind::Succeeded,
             },
             TransitionCase {
                 name: "running successful replacement",
                 setup: Setup::RunningLoop,
                 action: Action::LoadSuccess,
                 expected: StateKind::Running,
+                expected_attempt: AttemptKind::Succeeded,
             },
             TransitionCase {
                 name: "running failed replacement",
                 setup: Setup::RunningLoop,
                 action: Action::LoadFailure,
                 expected: StateKind::Running,
+                expected_attempt: AttemptKind::Failed,
             },
             TransitionCase {
                 name: "faulted tick",
                 setup: Setup::Faulted,
                 action: Action::Tick,
                 expected: StateKind::Faulted,
+                expected_attempt: AttemptKind::Succeeded,
             },
             TransitionCase {
                 name: "faulted successful replacement",
                 setup: Setup::Faulted,
                 action: Action::LoadSuccess,
                 expected: StateKind::Running,
+                expected_attempt: AttemptKind::Succeeded,
             },
             TransitionCase {
                 name: "faulted failed replacement",
                 setup: Setup::Faulted,
                 action: Action::LoadFailure,
                 expected: StateKind::Faulted,
+                expected_attempt: AttemptKind::Failed,
             },
         ];
 
@@ -426,11 +443,96 @@ mod tests {
                 Action::LoadFailure => load(&mut gui, &empty_path),
             }
             assert_eq!(state_kind(&gui), case.expected, "{}", case.name);
+            assert_eq!(attempt_kind(&gui), case.expected_attempt, "{}", case.name);
         }
 
         remove_rom(&loop_path);
         remove_rom(&fault_path);
         remove_rom(&empty_path);
+    }
+
+    #[test]
+    fn idle_and_success_status_are_truthful() {
+        let mut gui = new_gui();
+        assert_eq!(attempt_kind(&gui), AttemptKind::NotAttempted);
+        assert_eq!(
+            gui.rom_loader.load_status_text().as_ref(),
+            "ROM load: No ROM loaded."
+        );
+        assert_eq!(
+            RomLoader::runtime_status_text(&gui.runtime).as_ref(),
+            "Runtime: Idle"
+        );
+
+        let path = write_rom("status-success", &[0x1200]);
+        let expected_path = path.to_string_lossy().into_owned();
+        load(&mut gui, &path);
+
+        assert_eq!(state_kind(&gui), StateKind::Running);
+        assert_eq!(
+            gui.rom_loader.attempt(),
+            &rom_loader::LoadAttempt::Succeeded {
+                path: expected_path.clone(),
+                bytes: 2,
+            }
+        );
+        assert_eq!(
+            gui.rom_loader.load_status_text().as_ref(),
+            format!("ROM load: Successfully loaded 2 bytes from '{expected_path}'.")
+        );
+        assert_eq!(
+            RomLoader::runtime_status_text(&gui.runtime).as_ref(),
+            "Runtime: Running"
+        );
+
+        remove_rom(&path);
+    }
+
+    #[test]
+    fn initial_load_failures_report_attempt_path_and_reason() {
+        let unreadable_path = write_rom("status-unreadable", &[0x1200]);
+        remove_rom(&unreadable_path);
+        let empty_path = write_rom("status-empty", &[]);
+        let oversized_path = std::env::temp_dir().join(format!(
+            "c8emu-gui-{}-status-oversized.ch8",
+            std::process::id()
+        ));
+        fs::write(&oversized_path, vec![0; 4096 - 0x200 + 1]).expect("write oversized test ROM");
+        let cases = [
+            (&unreadable_path, "failed to open CHIP-8 ROM file"),
+            (&empty_path, "CHIP-8 ROM must not be empty"),
+            (
+                &oversized_path,
+                "CHIP-8 ROM too large for memory: expected at most 3584, got 3585 bytes",
+            ),
+        ];
+
+        for (path, reason_fragment) in cases {
+            let mut gui = new_gui();
+            load(&mut gui, path);
+            let attempted_path = path.to_string_lossy();
+
+            assert_eq!(state_kind(&gui), StateKind::Idle);
+            match gui.rom_loader.attempt() {
+                rom_loader::LoadAttempt::Failed { path, reason } => {
+                    assert_eq!(path, attempted_path.as_ref());
+                    assert!(reason.contains(reason_fragment), "{reason}");
+                }
+                other => panic!("expected failed load attempt, got {other:?}"),
+            }
+            let status = gui.rom_loader.load_status_text();
+            assert!(status.starts_with("ROM load failed for"), "{status}");
+            assert!(status.contains(attempted_path.as_ref()), "{status}");
+            assert!(status.contains(reason_fragment), "{status}");
+            assert!(!status.contains("Successfully"), "{status}");
+            assert_eq!(
+                RomLoader::runtime_status_text(&gui.runtime).as_ref(),
+                "Runtime: Idle"
+            );
+        }
+
+        remove_rom(&empty_path);
+        remove_rom(&oversized_path);
     }
 
     #[test]
@@ -461,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    fn execution_fault_is_retained_until_a_clean_restart() {
+    fn execution_fault_is_distinct_and_retained_until_a_clean_restart() {
         reset_counted_fault_logs();
         let fault_path = write_rom("fault-retention", &[COUNTED_FAULT_OPCODE]);
         let empty_path = write_rom("fault-retention-empty", &[]);
@@ -472,16 +574,51 @@ mod tests {
         tick(&mut gui);
         assert_eq!(invalid_opcode_fault_pc(&gui), 0x200);
         let first_diagnostic = fault(&gui).to_string();
+        let fault_status = RomLoader::runtime_status_text(&gui.runtime).into_owned();
+        assert_eq!(
+            fault_status,
+            format!("Runtime: Faulted (stopped): {first_diagnostic}")
+        );
+        assert_eq!(attempt_kind(&gui), AttemptKind::Succeeded);
         assert_eq!(COUNTED_FAULT_LOGS.load(Ordering::Relaxed), 1);
 
         tick(&mut gui);
         assert_eq!(fault(&gui).to_string(), first_diagnostic);
         assert_eq!(COUNTED_FAULT_LOGS.load(Ordering::Relaxed), 1);
+
         load(&mut gui, &empty_path);
         assert_eq!(fault(&gui).to_string(), first_diagnostic);
+        let failed_load_status = gui.rom_loader.load_status_text().into_owned();
+        let retained_fault_status = RomLoader::runtime_status_text(&gui.runtime).into_owned();
+        assert!(
+            failed_load_status.starts_with("ROM load failed for"),
+            "{failed_load_status}"
+        );
+        assert!(
+            failed_load_status.contains("CHIP-8 ROM must not be empty"),
+            "{failed_load_status}"
+        );
+        assert_eq!(retained_fault_status, fault_status);
+        assert!(!failed_load_status.contains("Runtime: Faulted"));
+        assert!(!retained_fault_status.contains("ROM load failed"));
 
         load(&mut gui, &loop_path);
         assert_eq!(state_kind(&gui), StateKind::Running);
+        assert_eq!(attempt_kind(&gui), AttemptKind::Succeeded);
+        assert_eq!(
+            RomLoader::runtime_status_text(&gui.runtime).as_ref(),
+            "Runtime: Running"
+        );
+        let recovery_status = gui.rom_loader.load_status_text();
+        assert!(
+            recovery_status.starts_with("ROM load: Successfully loaded"),
+            "{recovery_status}"
+        );
+        assert!(
+            recovery_status.contains(loop_path.to_string_lossy().as_ref()),
+            "{recovery_status}"
+        );
+        assert!(!recovery_status.contains("failed"), "{recovery_status}");
         tick(&mut gui);
         assert_eq!(state_kind(&gui), StateKind::Running);
 
@@ -527,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_replacement_preserves_the_running_session() {
+    fn failed_replacement_preserves_running_session_and_reports_attempt() {
         let mut values = vec![0x7000; 10];
         values.push(0xFFFF);
         let session_path = write_rom("failed-replacement-session", &values);
@@ -536,10 +673,20 @@ mod tests {
 
         load(&mut gui, &session_path);
         tick(&mut gui);
-        assert_eq!(state_kind(&gui), StateKind::Running);
+        let runtime_before = state_kind(&gui);
+        let framebuffer_before = *gui.cpu.framebuffer();
+        assert_eq!(runtime_before, StateKind::Running);
 
         load(&mut gui, &empty_path);
-        assert_eq!(state_kind(&gui), StateKind::Running);
+        assert_eq!(state_kind(&gui), runtime_before);
+        assert_eq!(gui.cpu.framebuffer(), &framebuffer_before);
+        match gui.rom_loader.attempt() {
+            rom_loader::LoadAttempt::Failed { path, reason } => {
+                assert_eq!(path, empty_path.to_string_lossy().as_ref());
+                assert_eq!(reason, "CHIP-8 ROM must not be empty");
+            }
+            other => panic!("expected failed replacement attempt, got {other:?}"),
+        }
         tick(&mut gui);
         assert_eq!(invalid_opcode_fault_pc(&gui), 0x214);
 

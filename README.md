@@ -7,7 +7,7 @@ A desktop CHIP-8 emulator written in Rust with an [Iced](https://iced.rs/) inter
 ## Features
 
 - **CHIP-8 core and display:** Executes CHIP-8 instructions on the original 64×32 monochrome display.
-- **Timing:** The GUI requests an update every 16 ms and executes 10 CPU instructions per update, for nominal rates of about 60 timer updates and 600 instructions per second.
+- **Timing:** While a ROM is running, each nominal 60 Hz update advances the timers once and budgets 10 CPU instruction steps; idle and faulted sessions do not advance.
 - **ROM loading:** Accepts a ROM file path through the GUI.
 - **Keyboard mapping:** Maps a computer keyboard to the original 16-key hexadecimal keypad.
 

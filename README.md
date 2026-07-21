@@ -8,8 +8,8 @@ A desktop CHIP-8 emulator written in Rust with an [Iced](https://iced.rs/) inter
 
 - **CHIP-8 core and display:** Executes CHIP-8 instructions on the original 64×32 monochrome display.
 - **Timing:** While a ROM is running, each nominal 60 Hz update advances the timers once and budgets 10 CPU instruction steps; idle and faulted sessions do not advance.
-- **ROM loading:** Accepts a ROM file path through the GUI.
-- **Keyboard mapping:** Maps a computer keyboard to the original 16-key hexadecimal keypad.
+- **ROM loading:** Browses for a local ROM or accepts a manually entered path, then loads only on explicit confirmation.
+- **Controller:** Provides an on-screen CHIP-8 keypad and the matching physical-key map.
 
 ## Getting Started
 
@@ -43,11 +43,11 @@ Start the release build without changing the locked dependency graph:
 cargo run --release --locked
 ```
 
-Enter the path to a CHIP-8 ROM file and click **Load ROM**.
+Click **Browse** and choose a local ROM. The selected path is staged in the editable path field; review or edit it, then click **Load** to read and install the ROM. You can also type or paste a path manually and click **Load**.
 
 ## Keypad Mapping
 
-The CHIP-8 hexadecimal keypad is mapped to the keyboard as follows:
+The on-screen **Controller** sidebar presents the CHIP-8 hexadecimal keypad, with each button showing its matching host key. Control meanings are ROM-specific. The physical keyboard uses the same mapping:
 
 | CHIP-8 Keypad | Computer Keyboard |
 | :---: | :---: |

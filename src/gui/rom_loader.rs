@@ -4,7 +4,21 @@ use std::borrow::Cow;
 #[derive(Debug, Clone)]
 pub enum Message {
     RomPathChanged(String),
+    BrowseRom,
+    BrowseCompleted(Option<String>),
     LoadRom,
+}
+
+pub(super) fn browse() -> iced::Command<Message> {
+    iced::Command::perform(
+        async {
+            rfd::AsyncFileDialog::new()
+                .pick_file()
+                .await
+                .map(|file| file.path().to_string_lossy().into_owned())
+        },
+        Message::BrowseCompleted,
+    )
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,6 +94,9 @@ impl RomLoader {
             iced::widget::Text::new("Load ROM: "),
             iced::widget::TextInput::new("Enter ROM Path", &self.rom_path)
                 .on_input(Message::RomPathChanged),
+            iced::widget::Button::new("Browse")
+                .on_press(Message::BrowseRom)
+                .padding(15),
             iced::widget::Button::new("Load")
                 .on_press(Message::LoadRom)
                 .padding(15),

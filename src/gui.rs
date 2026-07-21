@@ -106,6 +106,13 @@ impl Application for Gui {
                 rom_loader::Message::RomPathChanged(path) => {
                     self.rom_loader.set_path(path);
                 }
+                rom_loader::Message::BrowseRom => {
+                    return rom_loader::browse().map(Message::RomLoader);
+                }
+                rom_loader::Message::BrowseCompleted(Some(path)) => {
+                    self.rom_loader.set_path(path);
+                }
+                rom_loader::Message::BrowseCompleted(None) => {}
                 rom_loader::Message::LoadRom => match self.cpu.load_rom(self.rom_loader.path()) {
                     Ok(result) => {
                         self.rom_loader.record_success(result.bytes_read);
@@ -691,6 +698,107 @@ mod tests {
 
         remove_rom(&session_path);
         remove_rom(&empty_path);
+    }
+
+    #[test]
+    fn browse_request_returns_one_async_action_without_mutating_state() {
+        let mut gui = new_gui();
+        let path_before = gui.rom_loader.path().to_owned();
+        let attempt_before = gui.rom_loader.load_status_text().into_owned();
+        let runtime_before = state_kind(&gui);
+        let framebuffer_before = *gui.cpu.framebuffer();
+
+        let actions = gui
+            .update(Message::RomLoader(rom_loader::Message::BrowseRom))
+            .actions();
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(gui.rom_loader.path(), path_before);
+        assert_eq!(gui.rom_loader.load_status_text(), attempt_before);
+        assert_eq!(state_kind(&gui), runtime_before);
+        assert_eq!(gui.cpu.framebuffer(), &framebuffer_before);
+
+        send(
+            &mut gui,
+            Message::RomLoader(rom_loader::Message::RomPathChanged(
+                "manually-edited.ch8".to_owned(),
+            )),
+        );
+        assert_eq!(gui.rom_loader.path(), "manually-edited.ch8");
+    }
+
+    #[test]
+    fn selected_path_is_staged_until_explicit_load() {
+        let mut session_program = vec![0x7000; 10];
+        session_program.push(0xFFFF);
+        let session_path = write_rom("browse-selection-session", &session_program);
+        let selected_path = write_rom("browse-selection-replacement", &[0x1200]);
+        let selected_path_text = selected_path.to_string_lossy().into_owned();
+        let mut gui = new_gui();
+
+        load(&mut gui, &session_path);
+        tick(&mut gui);
+        let attempt_before = gui.rom_loader.load_status_text().into_owned();
+        let runtime_before = state_kind(&gui);
+        let framebuffer_before = *gui.cpu.framebuffer();
+
+        send(
+            &mut gui,
+            Message::RomLoader(rom_loader::Message::BrowseCompleted(Some(
+                selected_path_text.clone(),
+            ))),
+        );
+
+        assert_eq!(gui.rom_loader.path(), selected_path_text);
+        assert_eq!(gui.rom_loader.load_status_text(), attempt_before);
+        assert_eq!(state_kind(&gui), runtime_before);
+        assert_eq!(gui.cpu.framebuffer(), &framebuffer_before);
+
+        tick(&mut gui);
+        assert_eq!(invalid_opcode_fault_pc(&gui), 0x214);
+
+        send(&mut gui, Message::RomLoader(rom_loader::Message::LoadRom));
+        assert_eq!(state_kind(&gui), StateKind::Running);
+        assert_eq!(
+            gui.rom_loader.attempt(),
+            &rom_loader::LoadAttempt::Succeeded {
+                path: selected_path_text,
+                bytes: 2,
+            }
+        );
+
+        remove_rom(&session_path);
+        remove_rom(&selected_path);
+    }
+
+    #[test]
+    fn cancelled_browse_is_an_exact_no_op() {
+        let mut session_program = vec![0x7000; 10];
+        session_program.push(0xFFFF);
+        let session_path = write_rom("browse-cancel-session", &session_program);
+        let mut gui = new_gui();
+
+        load(&mut gui, &session_path);
+        tick(&mut gui);
+        let path_before = gui.rom_loader.path().to_owned();
+        let attempt_before = gui.rom_loader.load_status_text().into_owned();
+        let runtime_before = state_kind(&gui);
+        let framebuffer_before = *gui.cpu.framebuffer();
+
+        send(
+            &mut gui,
+            Message::RomLoader(rom_loader::Message::BrowseCompleted(None)),
+        );
+
+        assert_eq!(gui.rom_loader.path(), path_before);
+        assert_eq!(gui.rom_loader.load_status_text(), attempt_before);
+        assert_eq!(state_kind(&gui), runtime_before);
+        assert_eq!(gui.cpu.framebuffer(), &framebuffer_before);
+
+        tick(&mut gui);
+        assert_eq!(invalid_opcode_fault_pc(&gui), 0x214);
+
+        remove_rom(&session_path);
     }
 
     #[test]

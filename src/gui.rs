@@ -1,11 +1,11 @@
+mod controls;
 mod display;
 mod rom_loader;
 
 use crate::cpu::{Cpu, CpuFault};
 use crate::gui::display::Display;
 use crate::gui::rom_loader::RomLoader;
-use iced::keyboard::Key;
-use iced::{event, Application, Command, Element, Event, Subscription, Theme};
+use iced::{event, Application, Command, Element, Event, Length, Subscription, Theme};
 use log::error;
 use std::time::Duration;
 
@@ -23,6 +23,7 @@ enum RuntimeState {
 pub enum Message {
     Tick,
     Event(Event),
+    Controls(controls::Message),
     RomLoader(rom_loader::Message),
     Display(display::Message),
 }
@@ -32,6 +33,14 @@ pub struct Gui {
     runtime: RuntimeState,
     rom_loader: RomLoader,
     display: Display,
+}
+
+impl Gui {
+    fn route_keypad_input(&mut self, index: usize, pressed: bool) {
+        if matches!(&self.runtime, RuntimeState::Running) {
+            self.cpu.set_keypad(index, pressed);
+        }
+    }
 }
 
 impl Application for Gui {
@@ -81,12 +90,17 @@ impl Application for Gui {
                         _ => return Command::none(),
                     };
 
-                    if matches!(&self.runtime, RuntimeState::Running) {
-                        if let Some(c8_key) = map_key(key) {
-                            self.cpu.set_keypad(c8_key, pressed);
-                        }
+                    if let Some(c8_key) = controls::map_key(&key) {
+                        self.route_keypad_input(c8_key, pressed);
                     }
                 }
+            }
+            Message::Controls(intent) => {
+                let (index, pressed) = match intent {
+                    controls::Message::Press(index) => (index, true),
+                    controls::Message::Release(index) => (index, false),
+                };
+                self.route_keypad_input(index, pressed);
             }
             Message::RomLoader(msg) => match msg {
                 rom_loader::Message::RomPathChanged(path) => {
@@ -109,9 +123,19 @@ impl Application for Gui {
     }
 
     fn view(&self) -> Element<'_, Message> {
+        let workspace = iced::widget::Row::new()
+            .push(self.display.view().map(Message::Display))
+            .push(controls::view().map(Message::Controls))
+            .spacing(15)
+            .width(Length::Fill)
+            .height(Length::Fill);
+
         iced::widget::Column::new()
             .push(self.rom_loader.view(&self.runtime).map(Message::RomLoader))
-            .push(self.display.view().map(Message::Display))
+            .push(workspace)
+            .spacing(10)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .padding(15)
             .into()
     }
@@ -125,35 +149,10 @@ impl Application for Gui {
     }
 }
 
-fn map_key(key: Key) -> Option<usize> {
-    match key {
-        Key::Character(s) => match s.as_str() {
-            "1" => Some(0x1),
-            "2" => Some(0x2),
-            "3" => Some(0x3),
-            "4" => Some(0xC),
-            "q" | "Q" => Some(0x4),
-            "w" | "W" => Some(0x5),
-            "e" | "E" => Some(0x6),
-            "r" | "R" => Some(0xD),
-            "a" | "A" => Some(0x7),
-            "s" | "S" => Some(0x8),
-            "d" | "D" => Some(0x9),
-            "f" | "F" => Some(0xE),
-            "z" | "Z" => Some(0xA),
-            "x" | "X" => Some(0x0),
-            "c" | "C" => Some(0xB),
-            "v" | "V" => Some(0xF),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iced::keyboard::{Location, Modifiers};
+    use iced::keyboard::{Key, Location, Modifiers};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -730,7 +729,7 @@ mod tests {
 
         for (character, keypad_index) in mappings {
             let key = Key::Character(character.into());
-            assert_eq!(map_key(key.clone()), Some(keypad_index));
+            assert_eq!(controls::map_key(&key), Some(keypad_index));
             fs::write(&probe_path, opcodes(&key_probe(keypad_index))).expect("rewrite key probe");
 
             let mut pressed = new_gui();
@@ -756,7 +755,7 @@ mod tests {
         }
 
         for key in [Key::Character("g".into()), Key::Unidentified] {
-            assert_eq!(map_key(key.clone()), None);
+            assert_eq!(controls::map_key(&key), None);
             fs::write(&probe_path, opcodes(&key_probe(0))).expect("rewrite key probe");
             let mut gui = new_gui();
             load(&mut gui, &probe_path);
@@ -774,12 +773,72 @@ mod tests {
         tick(&mut gui);
         assert_eq!(invalid_opcode_fault_pc(&gui), UNPRESSED_FAULT_PC);
 
+        fs::write(&probe_path, opcodes(&key_probe(0x5))).expect("rewrite key probe");
+        let mut multi_key = new_gui();
+        load(&mut multi_key, &probe_path);
+        send_key(&mut multi_key, Key::Character("q".into()), true);
+        send_key(&mut multi_key, Key::Character("w".into()), true);
+        send_key(&mut multi_key, Key::Character("q".into()), false);
+        tick(&mut multi_key);
+        assert_eq!(
+            invalid_opcode_fault_pc(&multi_key),
+            PRESSED_FAULT_PC,
+            "releasing one physical key must not clear another"
+        );
+
         remove_rom(&probe_path);
         remove_rom(&loop_path);
     }
 
     #[test]
-    fn idle_and_faulted_states_do_not_route_key_events() {
+    fn virtual_controller_routes_press_release_exit_and_duplicate_release() {
+        let probe_path = write_rom("virtual-keypad", &key_probe(0x4));
+
+        let mut pressed = new_gui();
+        load(&mut pressed, &probe_path);
+        send(
+            &mut pressed,
+            Message::Controls(controls::Message::Press(0x4)),
+        );
+        tick(&mut pressed);
+        assert_eq!(invalid_opcode_fault_pc(&pressed), PRESSED_FAULT_PC);
+
+        let mut released = new_gui();
+        load(&mut released, &probe_path);
+        send(
+            &mut released,
+            Message::Controls(controls::Message::Press(0x4)),
+        );
+        send(
+            &mut released,
+            Message::Controls(controls::Message::Release(0x4)),
+        );
+        tick(&mut released);
+        assert_eq!(invalid_opcode_fault_pc(&released), UNPRESSED_FAULT_PC);
+
+        let mut exited = new_gui();
+        load(&mut exited, &probe_path);
+        send(
+            &mut exited,
+            Message::Controls(controls::Message::Press(0x4)),
+        );
+        // Mouse release and target exit both emit the same idempotent Release intent.
+        send(
+            &mut exited,
+            Message::Controls(controls::Message::Release(0x4)),
+        );
+        send(
+            &mut exited,
+            Message::Controls(controls::Message::Release(0x4)),
+        );
+        tick(&mut exited);
+        assert_eq!(invalid_opcode_fault_pc(&exited), UNPRESSED_FAULT_PC);
+
+        remove_rom(&probe_path);
+    }
+
+    #[test]
+    fn idle_and_faulted_states_do_not_route_physical_or_virtual_key_events() {
         let probe_path = write_rom("keypad-lifecycle-gate", &key_probe(0x4));
         let path = probe_path.to_string_lossy();
 
@@ -800,6 +859,33 @@ mod tests {
         faulted.runtime = RuntimeState::Running;
         tick(&mut faulted);
         assert_eq!(invalid_opcode_fault_pc(&faulted), UNPRESSED_FAULT_PC);
+
+        let mut virtual_idle = new_gui();
+        virtual_idle.cpu.load_rom(&path).expect("install probe");
+        send(
+            &mut virtual_idle,
+            Message::Controls(controls::Message::Press(0x4)),
+        );
+        virtual_idle.runtime = RuntimeState::Running;
+        tick(&mut virtual_idle);
+        assert_eq!(invalid_opcode_fault_pc(&virtual_idle), UNPRESSED_FAULT_PC);
+
+        let mut virtual_faulted = new_gui();
+        virtual_faulted.cpu.load_rom(&path).expect("install probe");
+        virtual_faulted.runtime = RuntimeState::Faulted(CpuFault::InvalidOpcode {
+            pc: 0x200,
+            opcode: 0xFFFF,
+        });
+        send(
+            &mut virtual_faulted,
+            Message::Controls(controls::Message::Press(0x4)),
+        );
+        virtual_faulted.runtime = RuntimeState::Running;
+        tick(&mut virtual_faulted);
+        assert_eq!(
+            invalid_opcode_fault_pc(&virtual_faulted),
+            UNPRESSED_FAULT_PC
+        );
 
         remove_rom(&probe_path);
     }

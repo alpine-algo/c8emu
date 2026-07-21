@@ -10,9 +10,17 @@ pub enum Message {
 }
 
 pub(super) fn browse() -> iced::Command<Message> {
+    let start_directory = std::env::current_dir().ok();
+
     iced::Command::perform(
-        async {
-            rfd::AsyncFileDialog::new()
+        async move {
+            let mut dialog = rfd::AsyncFileDialog::new();
+
+            if let Some(directory) = start_directory {
+                dialog = dialog.set_directory(directory);
+            }
+
+            dialog
                 .pick_file()
                 .await
                 .map(|file| file.path().to_string_lossy().into_owned())
